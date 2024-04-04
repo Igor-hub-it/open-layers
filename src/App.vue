@@ -22,6 +22,7 @@ import { Style, Circle, Fill, Stroke, Text } from "ol/style";
 import OSM from "ol/source/OSM";
 import "ol/ol.css";
 import GeoJSON from "ol/format/GeoJSON";
+import FeatureFormat from "ol/format/Feature";
 
 const mapRoot = ref(HTMLElement);
 const markers = ref([]);
@@ -75,9 +76,9 @@ onMounted(() => {
     features: features,
   });
 
-  const feature = new GeoJSON().readFeature(features, {
-    featureProjection: "EPSG:3857",
-  });
+  // const feature = new GeoJSON().readFeature(features, {
+  //   featureProjection: "EPSG:3857",
+  // });
 
   // const vectorLayer = new VectorLayer({
   //   source: new VectorSource({

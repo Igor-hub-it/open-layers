@@ -1,4 +1,4 @@
-export interface Territory {
+export interface Feature {
   /* Название территории */
   name: string;
 
