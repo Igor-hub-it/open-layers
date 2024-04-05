@@ -2,8 +2,8 @@
   <div class="view">
     <div ref="mapRoot" style="width: 70%; height: 100vh"></div>
     <div class="marker-block">
-      <div v-for="(marker, index) in markers" :key="index" class="marker">
-        <!-- {{ marker.name }} - {{ marker.coordinate }} -->
+      <div v-for="(marker, index) in VectorSource" :key="index" class="marker">
+        {{ marker.coordinate }}
       </div>
     </div>
   </div>
@@ -23,200 +23,87 @@ import OSM from "ol/source/OSM";
 import "ol/ol.css";
 import GeoJSON from "ol/format/GeoJSON";
 import FeatureFormat from "ol/format/Feature";
+import { Polygon } from "ol/geom";
+import { getDangerousTerritories } from "@/api/territories";
 
-const mapRoot = ref(HTMLElement);
-const markers = ref([]);
+const mapRoot = ref<HTMLElement | null>(null);
+const markers = ref<{ name: string, coordinate: [number, number] }[]>([])
 
-const cities = [
-  // { name: "Москва", coordinate: [4188119.7558, 7509445.6176] },
-  { name: "Санкт-Петербург", coordinate: [59.9343, 30.3351] },
-  { name: "Новосибирск", coordinate: [55.0084, 82.9357] },
-  { name: "Барнаул", coordinate: [9325115, 7046542] },
-  { name: "Кемерово", coordinate: [9586396, 7429010] },
-  { name: "Казань", coordinate: [55.8304, 49.0661] },
-  { name: "Челябинск", coordinate: [55.1644, 61.4368] },
-  { name: "Омск", coordinate: [54.9885, 73.3242] },
-  { name: "Самара", coordinate: [53.2001, 50.15] },
-  { name: "Ростов-на-Дону", coordinate: [47.2357, 39.7015] },
-];
+const features = ref<Feature[]>([])
 
-const features = cities.map((city) => {
-  const point = new Point(city.coordinate);
-  const feature = new Feature(point);
-  feature.set("name", city.name);
-  return feature;
-});
+onMounted(async () => {
+  
+  const featureCollection = await getDangerousTerritories();
 
-// const data = {
-//   type: "Feature",
-//   properties: {},
-//   geometry: {
-//     type: "Point",
-//     coordinates: [cities.map((city) => city.coordinate)],
-//   },
-// };
-
-console.log(features);
-
-// const polygons = [
-//   {
-//     name: "Example Polygon",
-//     coordinates: [
-//       [3000000, 5000000],
-//       [4000000, 6000000],
-//       [4500000, 5500000],
-//       [1100000, 1100000],
-//       [1000000, 1000000],
-//     ],
-//   },
-// ];
-
-onMounted(() => {
-  const vectorSource = new VectorSource({
-    features: features,
+  features.value = featureCollection.features.map((featureData) => {
+    const polygonCoordinates = featureData.burnedPolygon[0].map(([x, y]) => [x, y]);
+    const polygonFeature = new Feature({
+      geometry: new Polygon([polygonCoordinates]),
+    });
+    return polygonFeature;
   });
 
-  // const feature = new GeoJSON().readFeature(features, {
-  //   featureProjection: "EPSG:3857",
-  // });
+  const vectorSource = new VectorSource({
+    features: features.value,
+  });
 
-  // const vectorLayer = new VectorLayer({
-  //   source: new VectorSource({
-  //     features: [feature],
-  //   }),
-  // });
+  const vectorLayer = new VectorLayer({
+    source: vectorSource,
+    style: new Style({
+      fill: new Fill({
+        color: "rgba(255, 0, 0, 0.5)", // Красный цвет с прозрачностью
+      }),
+      stroke: new Stroke({
+        color: "red",
+        width: 2,
+      }),
+    }),
+  });
 
-  new Map({
+  const map = new Map({
     target: mapRoot.value,
     layers: [
       new TileLayer({
         source: new OSM(),
       }),
-      new VectorLayer({
-        source: vectorSource,
-        style: new Style({
-          image: new Circle({
-            radius: 6,
-            fill: new Fill({ color: "blue" }),
-            stroke: new Stroke({
-              color: "#fff",
-              width: 2,
-            }),
-          }),
-          // text: new Text({
-          //   text: (feature) => feature.get("name"),
-          //   offsetY: -15,
-          //   font: "12px Calibri,sans-serif",
-          //   fill: new Fill({ color: "#000" }),
-          //   stroke: new Stroke({
-          //     color: "#fff",
-          //     width: 3,
-          //   }),
-          // }),
-        }),
-      }),
+      vectorLayer,
     ],
-
     view: new View({
       zoom: 2,
       center: [10, -43],
-      constrainResolution: true,
     }),
   });
 
-  // const map = new Map({
-  //   target: mapRoot.value,
-  //   layers: [
-  //     new TileLayer({
-  //       source: new OSM(),
-  //     }),
-  //     new VectorLayer({
-  //       source: vectorSource,
-  //     }),
-  //   ],
-  //   view: new View({
-  //     zoom: 3,
-  //     center: [50, 50],
-  //     constrainResolution: true,
-  //   }),
-  // });
-
-  // cities.forEach((city) => {
-  //   const marker = new Feature({
-  //     geometry: new Point(city.coordinate),
-  //   });
-  //   marker.setStyle(
-  //     new Style({
-  //       image: new Circle({
-  //         radius: 6,
-  //         fill: new Fill({ color: "#234343" }),
-  //         stroke: new Stroke({
-  //           color: "#fff",
-  //           width: 2,
-  //         }),
-  //       }),
-  //       text: new Text({
-  //         text: `(${city.name})`,
-  //         offsetY: -15,
-  //         font: "12px Calibri,sans-serif",
-  //         fill: new Fill({ color: "#000" }),
-  //         stroke: new Stroke({
-  //           color: "#fff",
-  //           width: 3,
-  //         }),
-  //       }),
-  //     })
-  //   );
-  //   vectorSource.addFeature(marker);
-  // });
-
-  // polygons.forEach((polygonData) => {
-  //   const polygonFeature = new Feature({
-  //     geometry: new Polygon([polygonData.coordinates]),
-  //   });
-  //   polygonFeature.setStyle(
-  //     new Style({
-  //       stroke: new Stroke({
-  //         color: "red",
-  //         width: 2,
-  //       }),
-  //       fill: new Fill({
-  //         color: "rgba(255, 0, 0, 0.2)",
-  //       }),
-  //     })
-  //   );
-  //   vectorSource.addFeature(polygonFeature);
-  // });
-
-  // map.on("click", function (event) {
-  //   const coordinate = event.coordinate;
-  //   const marker = new Feature({
-  //     geometry: new Point(coordinate),
-  //   });
-  //   marker.setStyle(
-  //     new Style({
-  //       image: new Circle({
-  //         radius: 6,
-  //         fill: new Fill({ color: "blue" }),
-  //         stroke: new Stroke({
-  //           color: "#fff",
-  //           width: 2,
-  //         }),
-  //       }),
-  //       text: new Text({
-  //         text: `(${coordinate[0].toFixed(2)}, ${coordinate[1].toFixed(2)})`,
-  //         offsetY: -15,
-  //         font: "12px Calibri,sans-serif",
-  //         fill: new Fill({ color: "#000" }),
-  //         stroke: new Stroke({
-  //           color: "#fff",
-  //           width: 3,
-  //         }),
-  //       }),
-  //     })
-  //   );
-  //   vectorSource.addFeature(marker);
-  // });
+  map.on("click", function (event) {
+    const coordinate = event.coordinate;
+    const marker = new Feature({
+      geometry: new Point(coordinate),
+    });
+    marker.setStyle(
+      new Style({
+        image: new Circle({
+          radius: 6,
+          fill: new Fill({ color: "blue" }),
+          stroke: new Stroke({
+            color: "#fff",
+            width: 2,
+          }),
+        }),
+        text: new Text({
+          text: `(${coordinate[0].toFixed(2)}, ${coordinate[1].toFixed(2)})`,
+          offsetY: -15,
+          font: "12px Calibri,sans-serif",
+          fill: new Fill({ color: "#000" }),
+          stroke: new Stroke({
+            color: "#fff",
+            width: 3,
+          }),
+        }),
+      })
+    );
+    vectorSource.addFeature(marker);
+    markers.value.push({ name: "New Marker", coordinate: [coordinate[0], coordinate[1]] });
+  });
 });
 </script>
 

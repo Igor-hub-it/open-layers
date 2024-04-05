@@ -6,7 +6,7 @@ export interface Feature {
   coordinate: [lat: number, lon: number];
 
   /* Территория (гео-полигон), пострадавшая в результате пожара массив координат (структура данных на усмотрение исполнителя)*/
-  burnedPolygon: [number, number][];
+  burnedPolygon: [number, number][][];
 
   /* Площадь, пострадавшей в результате пожара, территории  */
   burnedArea: number;
