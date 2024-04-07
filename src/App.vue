@@ -2,15 +2,37 @@
   <div class="view">
     <div ref="mapRoot" style="width: 70%; height: 100vh"></div>
     <div class="marker-block">
-      <div v-for="(marker, index) in VectorSource" :key="index" class="marker">
-        {{ marker.coordinate }}
+      <div class="filters">
+        <input v-model="filterQuery" placeholder="Поиск по названию или категории">
+        <div>
+          <label for="minHazard">Мин. категория опасности:</label>
+          <input type="range" id="minHazard" v-model="minHazardCategory" min="1" max="6">
+          <span>{{ minHazardCategory }}</span>
+        </div>
+        <div>
+          <label for="maxHazard">Макс. категория опасности:</label>
+          <input type="range" id="maxHazard" v-model="maxHazardCategory" min="1" max="6">
+          <span>{{ maxHazardCategory }}</span>
+        </div>
+      </div>
+      <div
+        v-for="(marker, index) in filteredMarkers"
+        :key="index"
+        class="marker"
+        @click="moveToMarker(marker)"
+      >
+        <div>{{ marker.name }}</div>
+        <div>Категория риска: {{ marker.hazardCategory }}</div>
+        <div>Площадь пострадавшей территории: {{ marker.burnedArea }}</div>
+        <div>Координаты центра: {{ marker.coordinate }}</div>
+        <br>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import View from "ol/View";
 import Map from "ol/Map";
 import TileLayer from "ol/layer/Tile";
@@ -21,46 +43,78 @@ import Point from "ol/geom/Point";
 import { Style, Circle, Fill, Stroke, Text } from "ol/style";
 import OSM from "ol/source/OSM";
 import "ol/ol.css";
-import GeoJSON from "ol/format/GeoJSON";
-import FeatureFormat from "ol/format/Feature";
 import { Polygon } from "ol/geom";
 import { getDangerousTerritories } from "@/api/territories";
+import Overlay from "ol/Overlay";
 
 const mapRoot = ref<HTMLElement | null>(null);
-const markers = ref<{ name: string, coordinate: [number, number] }[]>([])
+const map = ref<Map | null>(null);
+const markers = ref<{ name: string, coordinate: [number, number], burnedArea: number, hazardCategory: number }[]>([])
 
 const features = ref<Feature[]>([])
+
+const filterQuery = ref('');
+const minHazardCategory = ref(1);
+const maxHazardCategory = ref(6);
+
+const filteredMarkers = computed(() => {
+  return markers.value.filter((marker) => {
+    const matchesQuery = marker.name.toLowerCase().includes(filterQuery.value.toLowerCase()) ||
+                         marker.hazardCategory.toString().includes(filterQuery.value);
+    const withinHazardCategoryRange = marker.hazardCategory >= minHazardCategory.value &&
+                                      marker.hazardCategory <= maxHazardCategory.value;
+    return matchesQuery && withinHazardCategoryRange;
+  });
+});
+
+const moveToMarker = (marker: { coordinate: [number, number] }) => {
+  if (map.value) {
+    const view = map.value.getView();
+    view.setCenter([marker.coordinate[0], marker.coordinate[1]]);
+  }
+};
 
 onMounted(async () => {
   
   const featureCollection = await getDangerousTerritories();
 
+  featureCollection.features.forEach((featureData) => {
+    const coordinate = featureData.coordinate;
+    const name = featureData.name;
+    const burnedArea = featureData.burnedArea;
+    const hazardCategory = featureData.hazardCategory;
+    markers.value.push({ name, coordinate, burnedArea, hazardCategory });
+  });
+  
   features.value = featureCollection.features.map((featureData) => {
     const polygonCoordinates = featureData.burnedPolygon[0].map(([x, y]) => [x, y]);
     const polygonFeature = new Feature({
       geometry: new Polygon([polygonCoordinates]),
+      name: featureData.name,
+      burnedArea: featureData.burnedArea,
+      hazardCategory: featureData.hazardCategory
     });
     return polygonFeature;
   });
-
+  
   const vectorSource = new VectorSource({
     features: features.value,
   });
-
+  
   const vectorLayer = new VectorLayer({
     source: vectorSource,
     style: new Style({
       fill: new Fill({
-        color: "rgba(255, 0, 0, 0.5)", // Красный цвет с прозрачностью
+        color: `rgba(255, 0, 0, 0.1)`,
       }),
       stroke: new Stroke({
         color: "red",
-        width: 2,
+        width: 0.3,
       }),
     }),
   });
 
-  const map = new Map({
+  map.value = new Map({
     target: mapRoot.value,
     layers: [
       new TileLayer({
@@ -69,16 +123,17 @@ onMounted(async () => {
       vectorLayer,
     ],
     view: new View({
-      zoom: 2,
-      center: [10, -43],
+      zoom: 3,
+      center: [9000000, 8038000],
     }),
   });
-
-  map.on("click", function (event) {
+  
+  map.value.on("click", function (event) {
     const coordinate = event.coordinate;
     const marker = new Feature({
-      geometry: new Point(coordinate),
-    });
+      geometry: new Point(coordinate)
+    })
+    map.value.getView().setCenter(coordinate)
     marker.setStyle(
       new Style({
         image: new Circle({
@@ -89,10 +144,31 @@ onMounted(async () => {
             width: 2,
           }),
         }),
+      })
+    )
+    vectorSource.addFeature(marker);
+  })
+
+  markers.value.forEach((marker) => {
+    const coordinate = marker.coordinate;
+    const dangerCategory = marker.hazardCategory
+    const name = marker.name;
+    const feature = new Feature({
+      geometry: new Point(coordinate),
+    });
+    feature.setStyle(
+      new Style({
+        image: new Circle({
+          radius: 5,
+          fill: new Fill({ color: `rgba(255, 0, 0, 0.${dangerCategory})` }),
+          stroke: new Stroke({
+            color: "#black",
+            width: 2,
+          }),
+        }),
         text: new Text({
-          text: `(${coordinate[0].toFixed(2)}, ${coordinate[1].toFixed(2)})`,
+          text: name,
           offsetY: -15,
-          font: "12px Calibri,sans-serif",
           fill: new Fill({ color: "#000" }),
           stroke: new Stroke({
             color: "#fff",
@@ -101,8 +177,38 @@ onMounted(async () => {
         }),
       })
     );
-    vectorSource.addFeature(marker);
-    markers.value.push({ name: "New Marker", coordinate: [coordinate[0], coordinate[1]] });
+    vectorSource.addFeature(feature);
+  });
+
+  const overlay = new Overlay({
+    element: document.createElement("div"),
+    autoPan: true,
+    autoPanAnimation: {
+      duration: 250,
+    },
+  });
+  map.value.addOverlay(overlay);
+
+  map.value.on("pointermove", (event) => {
+    map.value.getViewport().style.cursor = "";
+    const feature = map.value.forEachFeatureAtPixel(event.pixel, (feature) => {
+      return feature;
+    });
+    if (feature && feature.getGeometry().getType() === "Polygon") {
+      const coordinates = feature.getGeometry().getInteriorPoint().getCoordinates();
+      const info = `
+        <div>
+          <strong>${feature.get("name")}</strong><br>
+          Площадь пожара: ${feature.get("burnedArea")} гектар<br>
+          Класс опасности: ${feature.get("hazardCategory")}
+        </div>
+      `;
+      overlay.getElement().innerHTML = info;
+      overlay.setPosition(coordinates);
+      map.value.getViewport().style.cursor = "pointer";
+    } else {
+      overlay.setPosition(undefined);
+    }
   });
 });
 </script>
@@ -150,6 +256,17 @@ body {
 .marker-block {
   width: 30%;
   height: 100vh;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: rgba(255, 244, 244, 0.801);
+}
+
+.marker {
+  padding: 10px;
+  border: 1px solid black;
+  border-radius: 20px;
+  cursor: pointer;
 }
 </style>

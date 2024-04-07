@@ -9,7 +9,7 @@ export const getDangerousTerritories = (): Promise<FeatureCollection > => {
       "features": [
         {
             name: "Архангельские леса",
-            coordinate: [55, 55],
+            coordinate: [4939000, 9364000],
             burnedPolygon: [
               [
                 [4835000, 9970000],
@@ -33,8 +33,8 @@ export const getDangerousTerritories = (): Promise<FeatureCollection > => {
             hazardCategory: 3,
         },
         {
-          name: "Название территории 2",
-          coordinate: [50, 50],
+          name: "Иркутские леса",
+          coordinate: [12590000, 8465000],
           burnedPolygon: [
             [
               [12290000, 8664000],
@@ -50,7 +50,7 @@ export const getDangerousTerritories = (): Promise<FeatureCollection > => {
             ]
           ],
           burnedArea: 400,
-          hazardCategory: 2,
+          hazardCategory: 6,
         }
       ]
     })
